@@ -1,0 +1,14 @@
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.GeneratedMSBuildEditorConfig.editorconfig
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.AssemblyInfoInputs.cache
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.AssemblyInfo.cs
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.csproj.CoreCompileInputs.cache
+/Users/dangander/Documents/GitHub/Git Terminal/bin/Debug/net10.0/GitRepoManager
+/Users/dangander/Documents/GitHub/Git Terminal/bin/Debug/net10.0/GitRepoManager.deps.json
+/Users/dangander/Documents/GitHub/Git Terminal/bin/Debug/net10.0/GitRepoManager.runtimeconfig.json
+/Users/dangander/Documents/GitHub/Git Terminal/bin/Debug/net10.0/GitRepoManager.dll
+/Users/dangander/Documents/GitHub/Git Terminal/bin/Debug/net10.0/GitRepoManager.pdb
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.dll
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/refint/GitRepoManager.dll
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.pdb
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/GitRepoManager.genruntimeconfig.cache
+/Users/dangander/Documents/GitHub/Git Terminal/obj/Debug/net10.0/ref/GitRepoManager.dll
