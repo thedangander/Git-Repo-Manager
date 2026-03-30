@@ -45,7 +45,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore "Git Terminal.sln"
+        run: dotnet restore "GitRepoManager.slnx"
 
       - name: Publish
         run: |

@@ -23,7 +23,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore "Git Terminal.sln"
+        run: dotnet restore "GitRepoManager.slnx"
 
       - name: Build
-        run: dotnet build "Git Terminal.sln" -c Release --no-restore
+        run: dotnet build "GitRepoManager.slnx" -c Release --no-restore
