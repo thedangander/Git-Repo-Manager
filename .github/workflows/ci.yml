@@ -23,7 +23,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore "Git Terminal.sln"
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build "Git Terminal.sln" -c Release --no-restore
