@@ -30,7 +30,7 @@ A cross-platform terminal application for discovering and managing Git repositor
 
 ### Prerequisites
 
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) or later
 - Git installed and available in PATH
 
 ### Build from Source
