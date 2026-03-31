@@ -15,6 +15,7 @@ public interface IGitService
     bool HasUncommittedChanges(string repoPath);
     void Fetch(string repoPath, bool prune = true);
     string Pull(string repoPath);
+    void Push(string repoPath);
     string Checkout(string repoPath, string branch, bool createTracking = false);
 }
 

@@ -35,9 +35,11 @@ public sealed class ProcessRunner : IProcessRunner
 
             process.Start();
             var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
             var exited = process.WaitForExit(timeoutMs);
 
-            return new ProcessResult(output, exited ? process.ExitCode : -1, !exited);
+            var combined = string.IsNullOrEmpty(error) ? output : output + "\n" + error;
+            return new ProcessResult(combined, exited ? process.ExitCode : -1, !exited);
         }
         catch
         {

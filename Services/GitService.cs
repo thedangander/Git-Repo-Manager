@@ -63,10 +63,27 @@ public sealed class GitService : IGitService
         => !string.IsNullOrEmpty(RunCommand(repoPath, "status --porcelain").Trim());
 
     public void Fetch(string repoPath, bool prune = true)
-        => RunCommand(repoPath, prune ? "fetch --all --prune" : "fetch --all");
+    {
+        var args = prune ? "fetch --all --prune" : "fetch --all";
+        var res = _processRunner.Run("git", args, repoPath, _timeoutMs);
+        if (res.ExitCode != 0)
+            throw new InvalidOperationException($"git fetch failed (exit={res.ExitCode} timedOut={res.TimedOut})\n{res.Output}");
+    }
+
+    public void Push(string repoPath)
+    {
+        var res = _processRunner.Run("git", "push", repoPath, _timeoutMs);
+        if (res.ExitCode != 0)
+            throw new InvalidOperationException($"git push failed (exit={res.ExitCode} timedOut={res.TimedOut})\n{res.Output}");
+    }
 
     public string Pull(string repoPath)
-        => RunCommand(repoPath, "pull");
+    {
+        var res = _processRunner.Run("git", "pull", repoPath, _timeoutMs);
+        if (res.ExitCode != 0)
+            throw new InvalidOperationException($"git pull failed (exit={res.ExitCode} timedOut={res.TimedOut})\n{res.Output}");
+        return res.Output;
+    }
 
     public string Checkout(string repoPath, string branch, bool createTracking = false)
     {
@@ -74,14 +91,21 @@ public sealed class GitService : IGitService
             ? $"checkout -b {branch} origin/{branch}"
             : $"checkout {branch}";
 
-        var result = RunCommand(repoPath, command);
-
-        // If branch already exists locally, just check it out
-        if (createTracking && result.Contains("already exists"))
+        var res = _processRunner.Run("git", command, repoPath, _timeoutMs);
+        if (res.ExitCode != 0)
         {
-            return RunCommand(repoPath, $"checkout {branch}");
+            // If branch already exists locally and createTracking was requested, try plain checkout
+            if (createTracking && res.Output.Contains("already exists"))
+            {
+                var r2 = _processRunner.Run("git", $"checkout {branch}", repoPath, _timeoutMs);
+                if (r2.ExitCode != 0)
+                    throw new InvalidOperationException($"git checkout failed (exit={r2.ExitCode} timedOut={r2.TimedOut})\n{r2.Output}");
+                return r2.Output;
+            }
+
+            throw new InvalidOperationException($"git checkout failed (exit={res.ExitCode} timedOut={res.TimedOut})\n{res.Output}");
         }
 
-        return result;
+        return res.Output;
     }
 }

@@ -20,6 +20,13 @@ public sealed class SpectreUI
     private bool _isScanning;
     private int _scanFoundCount;
     private bool _showDetails;
+    private string? _transientMessage;
+    private Color _transientColor = Color.White;
+    private DateTime _transientExpires = DateTime.MinValue;
+    private bool _modalActive;
+    private string _modalTitle = "";
+    private List<string> _modalLines = new();
+    private int _modalOffset;
     private Action? _pendingInteractive;
     
     private bool _running = true;
@@ -79,6 +86,13 @@ public sealed class SpectreUI
                 Console.Clear();
                     var layout = BuildLayout();
                 AnsiConsole.Write(layout);
+                    if (_modalActive)
+                    {
+                        var modalHeight = Math.Max(6, Console.WindowHeight / 2);
+                        var modalWidth = Math.Max(40, Console.WindowWidth * 2 / 3);
+                        var modal = SpectrePanels.BuildModal(_modalTitle, _modalLines, _modalOffset, modalHeight - 2, modalWidth);
+                        AnsiConsole.Write(new Padder(modal, new Padding(1, 1)));
+                    }
             }
 
             if (_pendingInteractive != null)
@@ -91,8 +105,8 @@ public sealed class SpectreUI
             if (Console.KeyAvailable)
             {
                 var key = Console.ReadKey(true);
-                HandleKeyPress(key);
-                EnsureScrollPosition();
+                if (_modalActive) HandleModalKey(key);
+                else { HandleKeyPress(key); EnsureScrollPosition(); }
             }
             else Thread.Sleep(50);
         }
@@ -128,10 +142,13 @@ public sealed class SpectreUI
 
         var repoPanelHeight = Math.Max(4, Console.WindowHeight - 4 - 3 - 4);
 
+        string? message = null; Color msgColor = Color.White;
+        lock (_lock) { if (!string.IsNullOrEmpty(_transientMessage) && DateTime.UtcNow < _transientExpires) { message = _transientMessage; msgColor = _transientColor; } }
+
         layout["Header"].Update(SpectrePanels.BuildHeader(_repositories.Count, _isScanning, _scanFoundCount));
         layout["Repositories"].Update(SpectrePanels.BuildRepositoryPanel(_repositories, _selectedIndex, _scrollTop, repoPanelHeight));
         if (_showDetails) layout["Details"].Update(SpectrePanels.BuildDetailsPanel(_repositories, _selectedIndex));
-        layout["StatusBar"].Update(SpectrePanels.BuildStatusBar(_externalApps.IsVSCodeInstalled, _repositories.Count));
+        layout["StatusBar"].Update(SpectrePanels.BuildStatusBar(_externalApps.IsVSCodeInstalled, _repositories.Count, message, msgColor));
 
         return layout;
     }
@@ -149,7 +166,7 @@ public sealed class SpectreUI
                 case ConsoleKey.J:
                     if (_selectedIndex < _repositories.Count - 1) _selectedIndex++; break;
                 case ConsoleKey.Enter:
-                    SyncSelected(); break;
+                    _pendingInteractive = SyncSelected; break;
                 case ConsoleKey.D:
                     _pendingInteractive = DeleteSelected; break;
                 case ConsoleKey.B:
@@ -161,7 +178,7 @@ public sealed class SpectreUI
                 case ConsoleKey.R:
                     ScanForRepositories(); break;
                 case ConsoleKey.F:
-                    FetchAll(); break;
+                    _pendingInteractive = FetchAll; break;
                 case ConsoleKey.I:
                     _showDetails = !_showDetails; break;
                 case ConsoleKey.PageUp:
@@ -171,6 +188,30 @@ public sealed class SpectreUI
                 case ConsoleKey.Q:
                 case ConsoleKey.Escape:
                     _running = false; break;
+            }
+        }
+    }
+
+    private void HandleModalKey(ConsoleKeyInfo key)
+    {
+        lock (_lock)
+        {
+            var height = Math.Max(6, Console.WindowHeight / 2);
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                case ConsoleKey.K:
+                    _modalOffset = Math.Max(0, _modalOffset - 1); break;
+                case ConsoleKey.DownArrow:
+                case ConsoleKey.J:
+                    _modalOffset = Math.Min(Math.Max(0, _modalLines.Count - height), _modalOffset + 1); break;
+                case ConsoleKey.PageUp:
+                    _modalOffset = Math.Max(0, _modalOffset - height); break;
+                case ConsoleKey.PageDown:
+                    _modalOffset = Math.Min(Math.Max(0, _modalLines.Count - height), _modalOffset + height); break;
+                case ConsoleKey.Escape:
+                case ConsoleKey.Q:
+                    _modalActive = false; break;
             }
         }
     }
@@ -231,23 +272,39 @@ public sealed class SpectreUI
         var repo = GetSelectedRepo(); if (repo == null) return;
         try
         {
-            // Show a small progress bar for the two-step sync (fetch + pull)
+            // Fetch, then push if we're ahead, pull if we're behind — show progress for each step
             AnsiConsole.Progress()
                 .AutoRefresh(true)
                 .AutoClear(true)
                 .Start(ctx =>
                 {
-                    var task = ctx.AddTask($"Syncing {repo.Name}", maxValue: 2);
+                    var task = ctx.AddTask($"Syncing {repo.Name}", maxValue: 3);
+                    // fetch
                     _git.Fetch(repo.Path);
                     task.Increment(1);
-                    _git.Pull(repo.Path);
-                    task.Increment(1);
+
+                    // re-evaluate ahead/behind after fetch
+                    var ab = _git.GetAheadBehind(repo.Path, repo.CurrentBranch);
+                    if (ab.HasValue && ab.Value.ahead > 0)
+                    {
+                        _git.Push(repo.Path);
+                        task.Increment(1);
+                    }
+
+                    if (ab.HasValue && ab.Value.behind > 0)
+                    {
+                        _git.Pull(repo.Path);
+                        task.Increment(1);
+                    }
                 });
 
             RefreshRepository(repo);
             ShowMessage("Sync complete!", Color.Green);
         }
-        catch (Exception ex) { ShowMessage($"Sync failed: {ex.Message}", Color.Red); }
+        catch (Exception ex)
+        {
+            OpenModal("Sync failed", ex.Message);
+        }
     }
 
     // spinner removed
@@ -264,8 +321,9 @@ public sealed class SpectreUI
             .HideCompleted(false)
             .Start(ctx =>
             {
-                var task = ctx.AddTask("Fetching repositories", maxValue: Math.Max(1, _repositories.Count));
-                foreach (var repo in _repositories)
+                var snapshot = _repositories.ToList();
+                var task = ctx.AddTask("Fetching repositories", maxValue: Math.Max(1, snapshot.Count));
+                foreach (var repo in snapshot)
                 {
                     try { _git.Fetch(repo.Path); } catch { failed.Add(repo.Name); }
                     task.Increment(1);
@@ -285,7 +343,19 @@ public sealed class SpectreUI
         AnsiConsole.Clear();
         var branch = AnsiConsole.Prompt(new SelectionPrompt<string>().Title($"[cyan]Switch branch for {repo.Name}[/]").PageSize(15).HighlightStyle(new Style(Color.Cyan1)).AddChoices(branches));
         Console.CursorVisible = false;
-        if (branch != repo.CurrentBranch) { try { _git.Checkout(repo.Path, branch, false); RefreshRepository(repo); ShowMessage($"Switched to {branch}", Color.Green); } catch (Exception ex) { ShowMessage($"Failed: {ex.Message}", Color.Red); } }
+        if (branch != repo.CurrentBranch)
+        {
+            try
+            {
+                _git.Checkout(repo.Path, branch, false);
+                RefreshRepository(repo);
+                ShowMessage($"Switched to {branch}", Color.Green);
+            }
+            catch (Exception ex)
+            {
+                OpenModal("Checkout failed", ex.Message);
+            }
+        }
     }
 
     private void OpenInTerminal() { var repo = GetSelectedRepo(); if (repo == null) return; try { _externalApps.OpenInTerminal(repo.Path); } catch (Exception ex) { ShowMessage($"Failed: {ex.Message}", Color.Red); } }
@@ -401,7 +471,36 @@ public sealed class SpectreUI
         }
     }
 
-    private void ShowMessage(string message, Color color) { /* placeholder for transient messages */ }
+    private void ShowMessage(string message, Color color)
+    {
+        lock (_lock)
+        {
+            _transientMessage = message;
+            _transientColor = color;
+            _transientExpires = DateTime.UtcNow.AddSeconds(4);
+        }
+
+        // clear after expiry on background task
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4500);
+            lock (_lock)
+            {
+                if (DateTime.UtcNow >= _transientExpires) _transientMessage = null;
+            }
+        });
+    }
+
+    private void OpenModal(string title, string content)
+    {
+        lock (_lock)
+        {
+            _modalTitle = title;
+            _modalLines = content?.Split('\n').Select(l => l.TrimEnd('\r')).ToList() ?? new List<string> { "" };
+            _modalOffset = 0;
+            _modalActive = true;
+        }
+    }
 
     private static string FormatSize(long bytes)
     {

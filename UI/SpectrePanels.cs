@@ -228,7 +228,7 @@ public static class SpectrePanels
         };
     }
 
-    public static Panel BuildStatusBar(bool isVsCodeInstalled, int repoCount)
+    public static Panel BuildStatusBar(bool isVsCodeInstalled, int repoCount, string? message = null, Color messageColor = default)
     {
         var shortcuts = new List<string>
         {
@@ -248,6 +248,11 @@ public static class SpectrePanels
         shortcuts.Add("[cyan]Q[/] Quit");
 
         var footer = new Markup($"[grey]repos: {repoCount}[/]");
+        if (!string.IsNullOrEmpty(message))
+        {
+            var color = messageColor == default ? "white" : messageColor.ToString();
+            footer = new Markup($"[{color}]{Markup.Escape(message)}[/]  {footer}");
+        }
         var grid = new Grid().AddColumn(new GridColumn().NoWrap())
             .AddRow(new Markup(string.Join("  │  ", shortcuts)))
             .AddRow(footer);
@@ -258,5 +263,22 @@ public static class SpectrePanels
             BorderStyle = new Style(Color.Grey37),
             Padding = new Padding(1, 1)
         };
+    }
+
+    public static Panel BuildModal(string title, List<string> lines, int offset, int maxLines, int width)
+    {
+        var slice = lines.Skip(offset).Take(maxLines).Select(l => new Markup(Markup.Escape(l))).ToList<IRenderable>();
+        if (slice.Count == 0) slice.Add(new Markup("[grey]No output[/]"));
+        var content = new Rows(slice);
+        var panel = new Panel(content)
+        {
+            Header = new PanelHeader($"[bold]{Markup.Escape(title)}[/]"),
+            Border = BoxBorder.Rounded,
+            BorderStyle = new Style(Color.Grey37),
+            Padding = new Padding(1, 1),
+            Expand = false
+        };
+
+        return panel;
     }
 }
