@@ -301,7 +301,57 @@ public sealed class SpectreUI
         AnsiConsole.MarkupLine(""); AnsiConsole.MarkupLine("[bold red]This action cannot be undone![/]"); AnsiConsole.MarkupLine("");
         if (!AnsiConsole.Confirm("Delete this repository?", false)) { Console.CursorVisible = false; return; }
         var typedName = AnsiConsole.Ask<string>($"Type '[cyan]{repo.Name}[/]' to confirm:"); if (typedName != repo.Name) { ShowMessage("Name doesn't match, deletion cancelled", Color.Yellow); Console.CursorVisible = false; return; }
-        try { _fileSystem.DeleteDirectoryRecursive(repo.Path); _repositories.Remove(repo); if (_selectedIndex >= _repositories.Count) _selectedIndex = Math.Max(0, _repositories.Count - 1); ShowMessage("Repository deleted", Color.Green); } catch (Exception ex) { ShowMessage($"Delete failed: {ex.Message}", Color.Red); }
+
+        try
+        {
+            // Enumerate files first so we can provide a per-file progress bar
+            var files = _fileSystem.EnumerateFiles(repo.Path, "*", SearchOption.AllDirectories).ToList();
+            var dirs = Directory.GetDirectories(repo.Path, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
+
+            AnsiConsole.Progress()
+                .AutoRefresh(true)
+                .AutoClear(true)
+                .Start(ctx =>
+                {
+                    var task = ctx.AddTask($"Deleting {repo.Name}", maxValue: Math.Max(1, files.Count + dirs.Count + 1));
+
+                    // Remove files
+                    foreach (var f in files)
+                    {
+                        try
+                        {
+                            _fileSystem.SetFileAttributes(f, FileAttributes.Normal);
+                            _fileSystem.DeleteFile(f);
+                        }
+                        catch { }
+                        task.Increment(1);
+                    }
+
+                    // Remove directories (deepest first)
+                    foreach (var d in dirs)
+                    {
+                        try { _fileSystem.SetFileAttributes(d, FileAttributes.Normal); _fileSystem.DeleteDirectory(d, false); } catch { }
+                        task.Increment(1);
+                    }
+
+                    // Finally remove root
+                    try { _fileSystem.DeleteDirectory(repo.Path, false); } catch { }
+                    task.Increment(1);
+                });
+
+            lock (_lock)
+            {
+                _repositories.Remove(repo);
+                if (_selectedIndex >= _repositories.Count) _selectedIndex = Math.Max(0, _repositories.Count - 1);
+            }
+
+            ShowMessage("Repository deleted", Color.Green);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Delete failed: {ex.Message}", Color.Red);
+        }
+
         Console.CursorVisible = false;
     }
 

@@ -12,6 +12,7 @@ public interface IFileSystem
     IEnumerable<string> EnumerateFiles(string path, string pattern, SearchOption option);
     void DeleteDirectory(string path, bool recursive);
     void DeleteDirectoryRecursive(string path);
+    void DeleteFile(string path);
     void SetFileAttributes(string path, FileAttributes attributes);
     long GetFileLength(string path);
 }
@@ -55,6 +56,8 @@ public sealed class FileSystemAdapter : IFileSystem
 
         Directory.Delete(path, recursive: true);
     }
+
+    public void DeleteFile(string path) => File.Delete(path);
 
     public void SetFileAttributes(string path, FileAttributes attributes)
         => File.SetAttributes(path, attributes);
