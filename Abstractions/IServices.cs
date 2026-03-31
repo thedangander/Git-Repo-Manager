@@ -24,6 +24,7 @@ public interface IGitService
 public interface IRepositoryScanner
 {
     event Action<string>? RepositoryFound;
+        event Action<string>? RepositoryChanged;
     List<GitRepository> Scan(string rootPath);
     GitRepository? CreateRepository(string repoPath);
 }

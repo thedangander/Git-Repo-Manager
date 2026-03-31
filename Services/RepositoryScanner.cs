@@ -11,6 +11,8 @@ public sealed class RepositoryScanner : IRepositoryScanner
     private readonly IGitService _git;
     private readonly IFileSystem _fileSystem;
     private readonly int _maxDepth;
+        private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTime> _lastChange = new(StringComparer.OrdinalIgnoreCase);
 
     public RepositoryScanner(IGitService git, IFileSystem fileSystem, int maxDepth = AppConfig.DefaultMaxScanDepth)
     {
@@ -20,12 +22,67 @@ public sealed class RepositoryScanner : IRepositoryScanner
     }
 
     public event Action<string>? RepositoryFound;
+    public event Action<string>? RepositoryChanged;
 
     public List<GitRepository> Scan(string rootPath)
     {
         var repositories = new List<GitRepository>();
         ScanDirectory(rootPath, 0, repositories);
+        // Reset and start watchers for discovered repositories
+        StartWatchers(repositories);
         return repositories;
+    }
+
+    private void StartWatchers(List<GitRepository> repositories)
+    {
+        // Dispose old watchers
+        foreach (var w in _watchers.Values) try { w.Dispose(); } catch { }
+        _watchers.Clear();
+        _lastChange.Clear();
+
+        foreach (var repo in repositories)
+        {
+            try
+            {
+                var gitDir = Path.Combine(repo.Path, ".git");
+                if (!_fileSystem.DirectoryExists(gitDir))
+                    continue;
+
+                var watcher = new FileSystemWatcher(gitDir)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite
+                };
+
+                FileSystemEventHandler handler = (s, e) => OnRepoChanged(repo.Path);
+                RenamedEventHandler rhandler = (s, e) => OnRepoChanged(repo.Path);
+
+                watcher.Changed += handler;
+                watcher.Created += handler;
+                watcher.Deleted += handler;
+                watcher.Renamed += rhandler;
+                watcher.EnableRaisingEvents = true;
+
+                _watchers[repo.Path] = watcher;
+            }
+            catch
+            {
+                // ignore watchers we can't create
+            }
+        }
+    }
+
+    private void OnRepoChanged(string repoPath)
+    {
+        // Throttle frequent events for same repo
+        lock (_lastChange)
+        {
+            var now = DateTime.UtcNow;
+            if (_lastChange.TryGetValue(repoPath, out var last) && (now - last).TotalMilliseconds < 800) return;
+            _lastChange[repoPath] = now;
+        }
+
+        RepositoryChanged?.Invoke(repoPath);
     }
 
     private void ScanDirectory(string path, int depth, List<GitRepository> repositories)
