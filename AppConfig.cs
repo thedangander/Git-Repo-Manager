@@ -6,8 +6,8 @@ namespace GitRepoManager;
 public sealed class AppConfig
 {
     public const int DefaultMaxScanDepth = 5;
-    public const int DefaultRefreshIntervalSeconds = 30;
-    public const int GitCommandTimeoutMs = 5000;
+    public const int DefaultRefreshIntervalSeconds = 300; // Increased to 5 minutes to reduce system load
+    public const int GitCommandTimeoutMs = 15000; // Increased to 15 seconds for better reliability
     public const int KeyPollIntervalMs = 50;
     public const int KeyTimeoutMs = 1000;
 
